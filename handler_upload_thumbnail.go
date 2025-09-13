@@ -1,10 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -44,11 +46,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	mediaType := header.Header.Get("Content-Type")
-	imageData, err := io.ReadAll(file)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
-		return
-	}
+	// _, err = io.ReadAll(file)
+	// if err != nil {
+	// 	respondWithError(w, http.StatusBadRequest, "Unable to parse form file", err)
+	// 	return
+	// }
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -56,18 +58,28 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// thumbnail := thumbnail{
-	// 	mediaType: mediaType,
-	// 	data:      imageData,
-	// }
+	// imageDataStr := base64.StdEncoding.EncodeToString(imageData)
+	// thumbnailUrl := fmt.Sprintf("data:%s;base64,%s", mediaType, imageDataStr)
+	// http://localhost:<port>/assets/<videoID>.<file_extension>
 
-	imageDataStr := base64.StdEncoding.EncodeToString(imageData)
-	thumbnailUrl := fmt.Sprintf("data:%s;base64,%s", mediaType, imageDataStr)
+	// /assets/<videoID>.<file_extension>
+	// filepath := fmt.Sprint()
+	parts := strings.Split(mediaType, "/")
+	filepath := filepath.Join(cfg.assetsRoot, fmt.Sprintf("%s.%s", videoIDString, parts[len(parts)-1]))
+	fmt.Println("creating file: ", filepath)
+	destinationFile, err := os.Create(filepath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error creating new file", err)
+	}
 
-	// data:<media-type>;base64,<data>
-	// videoThumbnails[videoID] = thumbnail
+	fmt.Println("copying file: ", filepath)
+	_, err = io.Copy(destinationFile, file)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Error copying file", err)
+	}
 
-	// newUrl := fmt.Sprintf("http://localhost:8091/api/thumbnails/%s", videoID)
+	fmt.Println("done copying file")
+	thumbnailUrl := fmt.Sprintf("http://localhost:8091/assets/%s.%s", videoIDString, parts[len(parts)-1])
 	video.ThumbnailURL = &thumbnailUrl
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
@@ -76,6 +88,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	respondWithJSON(w, http.StatusOK, video)
 
+	defer destinationFile.Close()
 	defer file.Close()
 
 }
