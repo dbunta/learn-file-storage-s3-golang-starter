@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -71,7 +73,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	// /assets/<videoID>.<file_extension>
 	// filepath := fmt.Sprint()
 	parts := strings.Split(mediaType, "/")
-	filepath := filepath.Join(cfg.assetsRoot, fmt.Sprintf("%s.%s", videoIDString, parts[len(parts)-1]))
+	// filepath := filepath.Join(cfg.assetsRoot, fmt.Sprintf("%s.%s", videoIDString, parts[len(parts)-1]))
+	var byteArray [32]byte
+	_, _ = rand.Read(byteArray[:])
+
+	filepath := filepath.Join(cfg.assetsRoot, fmt.Sprintf("%s.%s", base64.RawURLEncoding.EncodeToString(byteArray[:]), parts[len(parts)-1]))
 	fmt.Println("creating file: ", filepath)
 	destinationFile, err := os.Create(filepath)
 	if err != nil {
@@ -85,7 +91,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	fmt.Println("done copying file")
-	thumbnailUrl := fmt.Sprintf("http://localhost:8091/assets/%s.%s", videoIDString, parts[len(parts)-1])
+	thumbnailUrl := fmt.Sprintf("http://localhost:8091/assets/%s.%s", base64.RawURLEncoding.EncodeToString(byteArray[:]), parts[len(parts)-1])
 	video.ThumbnailURL = &thumbnailUrl
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
